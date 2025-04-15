@@ -370,39 +370,53 @@ const loadMore = async () => {
   loading.value = true;
   
   try {
-    const newData = await getFeedData(page.value, 10);
+    const response = await getFeedList({
+      page: page.value,
+      pageSize: 10
+    });
     
-    // 将 API 返回的数据与默认数据合并
-    const newItems = newData.map(item => ({
-      ...item,
-      type: item.type || Mock.Random.pick(['video', 'image']),
-      media: item.media || Mock.Random.pick([
-        'https://picsum.photos/300/400',
-        'https://picsum.photos/300/500',
-        'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-        'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4'
-      ]),
-      thumbnail: item.thumbnail || 'https://picsum.photos/300/400',
-      duration: item.duration || Mock.Random.pick(['00:15', '00:30', '01:00']),
-      tags: item.tags || [Mock.Random.pick(['游戏', '动漫', '美食', '生活']), Mock.Random.pick(['攻略', '二次元', '烹饪', '日常'])],
-      author: item.author || {
-        name: Mock.Random.cname(),
-        avatar: 'https://picsum.photos/40/40',
-        loaded: true
-      },
-      likes: item.likes || Mock.Random.integer(0, 9999),
-      isLiked: item.isLiked || Mock.Random.boolean(),
-      isPlaying: false,
-      loading: false,
-      mediaLoaded: false,
-      loadError: false
-    }));
+    // 创建新的数据，包含视频和图片
+    const newItems = response.data.map(item => {
+      const type = Mock.Random.pick(['video', 'image']);
+      return {
+        ...item,
+        type,
+        media: type === 'video' 
+          ? Mock.Random.pick([
+              'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+              'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4'
+            ])
+          : Mock.Random.pick([
+              'https://picsum.photos/300/400',
+              'https://picsum.photos/300/500'
+            ]),
+        thumbnail: 'https://picsum.photos/300/400',
+        duration: type === 'video' ? Mock.Random.pick(['00:15', '00:30', '01:00']) : null,
+        tags: [Mock.Random.pick(['游戏', '动漫', '美食', '生活']), Mock.Random.pick(['攻略', '二次元', '烹饪', '日常'])],
+        author: {
+          name: Mock.Random.cname(),
+          avatar: 'https://picsum.photos/40/40',
+          loaded: true
+        },
+        likes: Mock.Random.integer(0, 9999),
+        isLiked: Mock.Random.boolean(),
+        isPlaying: false,
+        loading: false,
+        mediaLoaded: false,
+        loadError: false
+      };
+    });
+
+    // 根据 URL 参数过滤内容
+    const filteredItems = feedType.value === 'default' 
+      ? newItems 
+      : newItems.filter(item => item.type === feedType.value);
     
-    if (page.value >= 5 || newItems.length === 0) {
+    if (page.value >= 5 || filteredItems.length === 0) {
       finished.value = true;
       Toast('没有更多内容了');
     } else {
-      items.value.push(...newItems);
+      items.value.push(...filteredItems);
       page.value++;
     }
   } catch (error) {
@@ -420,35 +434,49 @@ const onRefresh = async () => {
     finished.value = false;
     page.value = 1;
     
-    const newData = await getFeedData(1, 10);
+    const response = await getFeedList({
+      page: 1,
+      pageSize: 10
+    });
     
-    // 将 API 返回的数据与默认数据合并
-    const newItems = newData.map(item => ({
-      ...item,
-      type: item.type || Mock.Random.pick(['video', 'image']),
-      media: item.media || Mock.Random.pick([
-        'https://picsum.photos/300/400',
-        'https://picsum.photos/300/500',
-        'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-        'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4'
-      ]),
-      thumbnail: item.thumbnail || 'https://picsum.photos/300/400',
-      duration: item.duration || Mock.Random.pick(['00:15', '00:30', '01:00']),
-      tags: item.tags || [Mock.Random.pick(['游戏', '动漫', '美食', '生活']), Mock.Random.pick(['攻略', '二次元', '烹饪', '日常'])],
-      author: item.author || {
-        name: Mock.Random.cname(),
-        avatar: 'https://picsum.photos/40/40',
-        loaded: true
-      },
-      likes: item.likes || Mock.Random.integer(0, 9999),
-      isLiked: item.isLiked || Mock.Random.boolean(),
-      isPlaying: false,
-      loading: false,
-      mediaLoaded: false,
-      loadError: false
-    }));
+    // 创建新的数据，包含视频和图片
+    const newItems = response.data.map(item => {
+      const type = Mock.Random.pick(['video', 'image']);
+      return {
+        ...item,
+        type,
+        media: type === 'video' 
+          ? Mock.Random.pick([
+              'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+              'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4'
+            ])
+          : Mock.Random.pick([
+              'https://picsum.photos/300/400',
+              'https://picsum.photos/300/500'
+            ]),
+        thumbnail: 'https://picsum.photos/300/400',
+        duration: type === 'video' ? Mock.Random.pick(['00:15', '00:30', '01:00']) : null,
+        tags: [Mock.Random.pick(['游戏', '动漫', '美食', '生活']), Mock.Random.pick(['攻略', '二次元', '烹饪', '日常'])],
+        author: {
+          name: Mock.Random.cname(),
+          avatar: 'https://picsum.photos/40/40',
+          loaded: true
+        },
+        likes: Mock.Random.integer(0, 9999),
+        isLiked: Mock.Random.boolean(),
+        isPlaying: false,
+        loading: false,
+        mediaLoaded: false,
+        loadError: false
+      };
+    });
+
+    // 根据 URL 参数过滤内容
+    const filteredItems = feedType.value === 'default' 
+      ? newItems 
+      : newItems.filter(item => item.type === feedType.value);
     
-    items.value = newItems;
+    items.value = filteredItems;
     Toast('刷新成功');
   } catch (error) {
     console.error('Refresh error:', error);
