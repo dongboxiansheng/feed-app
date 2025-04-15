@@ -51,7 +51,7 @@
                     </van-button>
                   </div>
                   <div class="user-info-wrap">
-                    <span class="user-name">{{ displayUsers[i-1].name }}</span>
+                    <div class="user-name">{{ displayUsers[i-1].name }}</div>
                     <span class="user-desc">{{ displayUsers[i-1].description }}</span>
                   </div>
                 </div>
@@ -801,6 +801,7 @@ const setupIntersectionObserver = () => {
   font-size: 4vw;
   color: #333;
   font-weight: 500;
+  margin-bottom: 1.067vw;
 }
 
 .user-desc {
