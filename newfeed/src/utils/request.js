@@ -3,18 +3,20 @@ import { Toast } from 'vant';
 
 // 创建 axios 实例
 const service = axios.create({
-  baseURL: process.env.VUE_APP_BASE_API || '',
+  baseURL: 'https://67fe52e058f18d7209edb9e5.mockapi.io',  // 直接填入你的 MockAPI 地址
   timeout: 15000
 });
 
 // 请求拦截器
 service.interceptors.request.use(
   config => {
-    // 可以在这里添加 token 等认证信息
+    console.log('Request URL:', config.baseURL + config.url);
+    console.log('Request Method:', config.method);
+    console.log('Request Params:', config.params);
     return config;
   },
   error => {
-    console.error('Request error:', error);
+    console.log(error);
     return Promise.reject(error);
   }
 );
@@ -22,19 +24,12 @@ service.interceptors.request.use(
 // 响应拦截器
 service.interceptors.response.use(
   response => {
-    const res = response.data;
-    
-    // 这里可以根据后端的响应结构进行调整
-    if (res.code !== 0) {
-      Toast.fail(res.message || '请求失败');
-      return Promise.reject(new Error(res.message || '请求失败'));
-    }
-    
-    return res.data;
+    console.log('Response:', response.data);
+    return response;
   },
   error => {
-    console.error('Response error:', error);
-    Toast.fail(error.message || '网络错误');
+    console.log('Error:', error.response || error);
+    Toast(error.message || '请求失败');
     return Promise.reject(error);
   }
 );

@@ -7,8 +7,8 @@
       :pull-distance="120"
       :disabled="!canRefresh"
       success-text="刷新成功"
-      pulling-text="继续上拉刷新"
-      loosing-text="松开立即刷新"
+      pulling-text="下拉即可刷新"
+      loosing-text="释放立即刷新"
       loading-text="加载中..."
     >
       <div class="waterfall-container">
@@ -239,8 +239,12 @@ import { Toast } from 'vant';
 import axios from 'axios';
 import Mock from 'mockjs';
 import { useRoute } from 'vue-router';
+import { getFeedList } from '../api/feed';
 
 const route = useRoute();
+const feedType = computed(() => route.query.type || 'default');
+const userId = computed(() => route.query.userId || '');
+
 const items = ref([]);
 const loading = ref(false);
 const refreshing = ref(false);
@@ -252,70 +256,60 @@ let timer = null;
 const canRefresh = ref(false);
 const scrollTop = ref(0);
 
-// 优质用户数据
+// 添加触摸相关的变量
+const touchStartY = ref(0);
+const touchEndY = ref(0);
+const touchStartTime = ref(0);
+
+// 静态的推荐用户数据
 const recommendedUsers = ref([
   {
     id: 1,
     name: '阿萌',
     avatar: 'https://picsum.photos/50/50',
     description: '不装无害，只做自己喜欢的',
-    isFollowed: false
+    isFollowed: false,
+    loaded: true
   },
   {
     id: 2,
     name: '青空千绘',
     avatar: 'https://picsum.photos/51/51',
     description: '关注我，领取抽奖礼物！',
-    isFollowed: false
+    isFollowed: false,
+    loaded: true
   },
   {
     id: 3,
     name: '大漠无情',
     avatar: 'https://picsum.photos/52/52',
     description: '原创游戏手绘视频，每天更新',
-    isFollowed: false
+    isFollowed: false,
+    loaded: true
   },
   {
     id: 4,
     name: '小兔几',
     avatar: 'https://picsum.photos/53/53',
     description: '分享游戏攻略和有趣的事',
-    isFollowed: false
+    isFollowed: false,
+    loaded: true
   },
   {
     id: 5,
     name: '星空漫步',
     avatar: 'https://picsum.photos/54/54',
     description: '专注游戏测评十年',
-    isFollowed: false
+    isFollowed: false,
+    loaded: true
   },
   {
     id: 6,
     name: '游戏达人',
     avatar: 'https://picsum.photos/55/55',
     description: '深度解析游戏机制',
-    isFollowed: false
-  },
-  {
-    id: 7,
-    name: '云中漫步',
-    avatar: 'https://picsum.photos/56/56',
-    description: '分享独特的游戏视角',
-    isFollowed: false
-  },
-  {
-    id: 8,
-    name: '电竞小王子',
-    avatar: 'https://picsum.photos/57/57',
-    description: '专业的电竞解说',
-    isFollowed: false
-  },
-  {
-    id: 9,
-    name: '游戏解说员',
-    avatar: 'https://picsum.photos/58/58',
-    description: '带你玩转各类游戏',
-    isFollowed: false
+    isFollowed: false,
+    loaded: true
   }
 ]);
 
@@ -323,9 +317,9 @@ const recommendedUsers = ref([
 const displayUsers = computed(() => {
   const startIndex = currentPage.value * 3;
   return [
-    recommendedUsers.value[startIndex % 9],
-    recommendedUsers.value[(startIndex + 1) % 9],
-    recommendedUsers.value[(startIndex + 2) % 9]
+    recommendedUsers.value[startIndex % 6],
+    recommendedUsers.value[(startIndex + 1) % 6],
+    recommendedUsers.value[(startIndex + 2) % 6]
   ];
 });
 
@@ -352,189 +346,112 @@ const rightItems = computed(() => items.value.filter((_, index) => index % 2 ===
 // 视频引用集合
 const videoRefs = ref({});
 
-// 添加不同类型的模拟数据生成器
-const generateGameData = (count = 10) => {
-  return Array(count).fill(null).map((_, index) => ({
-    id: Mock.Random.guid(),
-    title: Mock.Random.ctitle(5, 20),
-    type: Mock.Random.pick(['image', 'video']),
-    media: Mock.Random.pick([
-      'https://picsum.photos/300/400',
-      'https://picsum.photos/300/500',
-      'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
-    ]),
-    thumbnail: 'https://picsum.photos/300/400',
-    duration: Mock.Random.pick(['00:15', '00:30', '01:00']),
-    tags: ['游戏', '攻略', '电竞'],
-    author: {
-      name: Mock.Random.cname(),
-      avatar: 'https://picsum.photos/40/40',
-      loaded: true
-    },
-    likes: Mock.Random.integer(0, 9999),
-    isLiked: Mock.Random.boolean(),
-    isPlaying: false,
-    loading: false,
-    mediaLoaded: false,
-    loadError: false
-  }));
-};
-
-const generateAnimeData = (count = 10) => {
-  return Array(count).fill(null).map((_, index) => ({
-    id: Mock.Random.guid(),
-    title: Mock.Random.ctitle(5, 20),
-    type: Mock.Random.pick(['image', 'video']),
-    media: Mock.Random.pick([
-      'https://picsum.photos/300/400',
-      'https://picsum.photos/300/500',
-      'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4'
-    ]),
-    thumbnail: 'https://picsum.photos/300/400',
-    duration: Mock.Random.pick(['00:15', '00:30', '01:00']),
-    tags: ['动漫', '二次元', 'ACG'],
-    author: {
-      name: Mock.Random.cname(),
-      avatar: 'https://picsum.photos/40/40',
-      loaded: true
-    },
-    likes: Mock.Random.integer(0, 9999),
-    isLiked: Mock.Random.boolean(),
-    isPlaying: false,
-    loading: false,
-    mediaLoaded: false,
-    loadError: false
-  }));
-};
-
-const generateFoodData = (count = 10) => {
-  return Array(count).fill(null).map((_, index) => ({
-    id: Mock.Random.guid(),
-    title: Mock.Random.ctitle(5, 20),
-    type: Mock.Random.pick(['image', 'video']),
-    media: Mock.Random.pick([
-      'https://picsum.photos/300/400',
-      'https://picsum.photos/300/500',
-      'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
-    ]),
-    thumbnail: 'https://picsum.photos/300/400',
-    duration: Mock.Random.pick(['00:15', '00:30', '01:00']),
-    tags: ['美食', '生活', '烹饪'],
-    author: {
-      name: Mock.Random.cname(),
-      avatar: 'https://picsum.photos/40/40',
-      loaded: true
-    },
-    likes: Mock.Random.integer(0, 9999),
-    isLiked: Mock.Random.boolean(),
-    isPlaying: false,
-    loading: false,
-    mediaLoaded: false,
-    loadError: false
-  }));
-};
-
-// 根据类型生成对应的数据
-const generateMockData = (count = 10) => {
-  const type = route.query.type || 'general';
-  switch (type) {
-    case 'game':
-      return generateGameData(count);
-    case 'anime':
-      return generateAnimeData(count);
-    case 'food':
-      return generateFoodData(count);
-    default:
-      return generateGameData(count);
+// 根据参数获取不同的数据
+const getFeedData = async (pageNum, pageSize) => {
+  try {
+    const response = await getFeedList({
+      page: pageNum,
+      pageSize: pageSize,
+      type: feedType.value,
+      userId: userId.value
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Get feed data error:', error);
+    Toast('获取数据失败');
+    return [];
   }
 };
 
-// 点赞功能
-const toggleLike = (item) => {
-  item.isLiked = !item.isLiked;
-  item.likes += item.isLiked ? 1 : -1;
-  Toast({
-    message: item.isLiked ? '点赞成功' : '已取消点赞',
-    position: 'bottom'
-  });
-};
-
-// 修改加载更多数据的逻辑
+// 修改 loadMore 函数
 const loadMore = async () => {
   if (loading.value || finished.value || refreshing.value) return;
   loading.value = true;
   
   try {
-    await new Promise(resolve => setTimeout(resolve, 800));
-    const newItems = generateMockData(10);
+    const newData = await getFeedData(page.value, 10);
     
-    if (page.value >= 5) {
+    // 将 API 返回的数据与默认数据合并
+    const newItems = newData.map(item => ({
+      ...item,
+      type: item.type || Mock.Random.pick(['video', 'image']),
+      media: item.media || Mock.Random.pick([
+        'https://picsum.photos/300/400',
+        'https://picsum.photos/300/500',
+        'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+        'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4'
+      ]),
+      thumbnail: item.thumbnail || 'https://picsum.photos/300/400',
+      duration: item.duration || Mock.Random.pick(['00:15', '00:30', '01:00']),
+      tags: item.tags || [Mock.Random.pick(['游戏', '动漫', '美食', '生活']), Mock.Random.pick(['攻略', '二次元', '烹饪', '日常'])],
+      author: item.author || {
+        name: Mock.Random.cname(),
+        avatar: 'https://picsum.photos/40/40',
+        loaded: true
+      },
+      likes: item.likes || Mock.Random.integer(0, 9999),
+      isLiked: item.isLiked || Mock.Random.boolean(),
+      isPlaying: false,
+      loading: false,
+      mediaLoaded: false,
+      loadError: false
+    }));
+    
+    if (page.value >= 5 || newItems.length === 0) {
       finished.value = true;
-      loading.value = false;
-      return;
+      Toast('没有更多内容了');
+    } else {
+      items.value.push(...newItems);
+      page.value++;
     }
-    
-    items.value.push(...newItems);
-    page.value++;
   } catch (error) {
-    Toast('加载失败');
+    console.error('Load more error:', error);
+    Toast('加载失败，请重试');
   } finally {
     loading.value = false;
   }
 };
 
-// 修改滚动监听逻辑
-const handleScroll = () => {
-  if (loading.value || finished.value || refreshing.value) return;
-  
-  const scrollHeight = document.documentElement.scrollHeight;
-  const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-  const clientHeight = window.innerHeight || document.documentElement.clientHeight;
-  
-  // 当距离底部100px时开始加载
-  if (scrollHeight - scrollTop - clientHeight <= 100) {
-    loadMore();
-  }
-  
-  // 只有在顶部时才允许下拉刷新
-  canRefresh.value = scrollTop <= 0;
-};
-
-// 修改 Intersection Observer 的配置
-const setupIntersectionObserver = () => {
-  if (observer) {
-    observer.disconnect();
-  }
-
-  observer = new IntersectionObserver(
-    (entries) => {
-      const entry = entries[0];
-      if (entry.isIntersecting && !loading.value && !finished.value && !refreshing.value) {
-        loadMore();
-      }
-    },
-    { 
-      threshold: 0.1,
-      rootMargin: '100px'
-    }
-  );
-
-  if (loadingRef.value) {
-    observer.observe(loadingRef.value);
-  }
-};
-
-// 修改刷新逻辑
+// 修改 onRefresh 函数
 const onRefresh = async () => {
   try {
     refreshing.value = true;
     finished.value = false;
     page.value = 1;
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    const newItems = generateMockData(10);
+    
+    const newData = await getFeedData(1, 10);
+    
+    // 将 API 返回的数据与默认数据合并
+    const newItems = newData.map(item => ({
+      ...item,
+      type: item.type || Mock.Random.pick(['video', 'image']),
+      media: item.media || Mock.Random.pick([
+        'https://picsum.photos/300/400',
+        'https://picsum.photos/300/500',
+        'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+        'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4'
+      ]),
+      thumbnail: item.thumbnail || 'https://picsum.photos/300/400',
+      duration: item.duration || Mock.Random.pick(['00:15', '00:30', '01:00']),
+      tags: item.tags || [Mock.Random.pick(['游戏', '动漫', '美食', '生活']), Mock.Random.pick(['攻略', '二次元', '烹饪', '日常'])],
+      author: item.author || {
+        name: Mock.Random.cname(),
+        avatar: 'https://picsum.photos/40/40',
+        loaded: true
+      },
+      likes: item.likes || Mock.Random.integer(0, 9999),
+      isLiked: item.isLiked || Mock.Random.boolean(),
+      isPlaying: false,
+      loading: false,
+      mediaLoaded: false,
+      loadError: false
+    }));
+    
     items.value = newItems;
     Toast('刷新成功');
   } catch (error) {
+    console.error('Refresh error:', error);
     Toast('刷新失败');
     items.value = [];
   } finally {
@@ -613,6 +530,9 @@ onMounted(() => {
   setupIntersectionObserver();
   startAutoPlay();
   window.addEventListener('scroll', handleScroll, { passive: true });
+  window.addEventListener('touchstart', handleTouchStart, { passive: true });
+  window.addEventListener('touchmove', handleTouchMove, { passive: true });
+  window.addEventListener('touchend', handleTouchEnd, { passive: true });
 });
 
 // 组件卸载时移除滚动监听
@@ -622,6 +542,9 @@ onUnmounted(() => {
     timer = null;
   }
   window.removeEventListener('scroll', handleScroll);
+  window.removeEventListener('touchstart', handleTouchStart);
+  window.removeEventListener('touchmove', handleTouchMove);
+  window.removeEventListener('touchend', handleTouchEnd);
   if (observer) {
     observer.disconnect();
   }
@@ -665,42 +588,119 @@ const onVideoEnded = (item) => {
 // 监听路由参数变化
 watch(
   () => route.query,
-  async () => {
+  async (newQuery) => {
+    console.log('Route query changed:', newQuery);
     refreshing.value = true;
     finished.value = false;
     page.value = 1;
     items.value = [];
     await onRefresh();
-  }
+  },
+  { immediate: true }
 );
+
+// 滚动监听
+const handleScroll = () => {
+  if (loading.value || finished.value || refreshing.value) return;
+  
+  const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+  const scrollHeight = document.documentElement.scrollHeight;
+  const clientHeight = window.innerHeight || document.documentElement.clientHeight;
+  
+  // 更新是否在顶部的状态
+  canRefresh.value = scrollTop <= 0;
+  
+  // 当距离底部小于阈值时触发加载更多
+  if (scrollHeight - scrollTop - clientHeight <= 50 && !loading.value) {
+    loadMore();
+  }
+};
+
+// 添加触摸事件处理
+const handleTouchStart = (e) => {
+  // 只在页面滚动到顶部时记录触摸起始位置
+  const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+  if (scrollTop <= 0) {
+    touchStartY.value = e.touches[0].clientY;
+    touchStartTime.value = Date.now();
+  }
+};
+
+const handleTouchMove = (e) => {
+  if (touchStartY.value > 0) {
+    touchEndY.value = e.touches[0].clientY;
+  }
+};
+
+const handleTouchEnd = () => {
+  if (touchStartY.value > 0 && touchEndY.value > 0) {
+    const touchDuration = Date.now() - touchStartTime.value;
+    const touchDistance = touchEndY.value - touchStartY.value;
+    
+    // 只有在页面顶部且是向上滑动时才触发刷新
+    if (touchDistance < -50 && touchDuration < 300 && canRefresh.value) {
+      onRefresh();
+    }
+    
+    // 重置触摸状态
+    touchStartY.value = 0;
+    touchEndY.value = 0;
+    touchStartTime.value = 0;
+  }
+};
+
+// 修改 Intersection Observer 配置
+const setupIntersectionObserver = () => {
+  if (observer) {
+    observer.disconnect();
+  }
+
+  observer = new IntersectionObserver(
+    (entries) => {
+      const entry = entries[0];
+      if (entry.isIntersecting && !loading.value && !finished.value && !refreshing.value) {
+        loadMore();
+      }
+    },
+    { 
+      threshold: 0,
+      rootMargin: '50px'
+    }
+  );
+
+  if (loadingRef.value) {
+    observer.observe(loadingRef.value);
+  }
+};
 </script>
 
 <style scoped>
 .feed-container {
-  padding: 12px;
+  padding: 3.2vw;
   min-height: 100vh;
-  padding-bottom: calc(env(safe-area-inset-bottom) + 16px);
+  padding-bottom: calc(env(safe-area-inset-bottom) + 4.267vw);
 }
 
 .waterfall-container {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: 3.2vw;
   width: 100%;
 }
 
 .feed-item {
-  margin-bottom: 12px;
+  margin-bottom: 3.2vw;
   break-inside: avoid;
   background: #fff;
-  border-radius: 8px;
+  border-radius: 2.133vw;
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0.533vw 3.2vw rgba(0, 0, 0, 0.1);
+  animation: fade-in 0.3s ease-out;
 }
 
 /* 优质用户推荐样式调整 */
 .recommended-users {
-  padding: 12px;
+  padding: 3.2vw;
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -710,14 +710,14 @@ watch(
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: -12px -12px 16px;
-  padding: 12px;
+  margin: -3.2vw -3.2vw 4.267vw;
+  padding: 3.2vw;
   background-color: #fbead8;
-  border-radius: 8px 8px 0 0;
+  border-radius: 2.133vw 2.133vw 0 0;
 }
 
 .section-title {
-  font-size: 15px;
+  font-size: 4vw;
   color: #333;
   font-weight: 500;
   margin: 0;
@@ -725,68 +725,66 @@ watch(
 
 .section-dots {
   display: flex;
-  gap: 4px;
+  gap: 1.067vw;
 }
 
 .dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 2px;
+  width: 1.067vw;
+  height: 1.067vw;
+  border-radius: 0.533vw;
   background-color: rgba(255, 102, 0, 0.2);
   transition: all 0.3s;
 }
 
 .dot.active {
-  width: 12px;
+  width: 3.2vw;
   background-color: #ff6600;
 }
 
 .user-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-bottom: 12px;
+  gap: 3.2vw;
+  padding-bottom: 3.2vw;
 }
 
 .recommended-user {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 0 0 16px;
+  gap: 3.2vw;
+  padding: 0 0 4.267vw;
 }
 
 .user-avatar-wrap {
   position: relative;
-  width: 48px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  width: 12.8vw;
 }
 
 .user-avatar {
-  width: 48px;
-  height: 48px;
+  width: 12.8vw;
+  height: 12.8vw;
   border-radius: 50%;
   object-fit: cover;
 }
 
 .follow-btn {
   position: absolute;
-  bottom: -8px;
-  height: 18px;
-  min-width: 36px;
+  bottom: -2.133vw;
+  left: 1.5vw;
+  height: 4.8vw;
+  min-width: 9.6vw;
   padding: 0;
-  border-radius: 9px;
+  border-radius: 2.4vw;
   background: #ff6600;
   color: #fff;
-  font-size: 16px;
+  font-size: 4.267vw;
   font-weight: normal;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
-  box-shadow: 0 2px 4px rgba(255, 102, 0, 0.2);
+  box-shadow: 0 0.533vw 1.067vw rgba(255, 102, 0, 0.2);
 }
 
 .follow-btn.followed {
@@ -795,20 +793,18 @@ watch(
 
 .user-info-wrap {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-top: 6px;
+  gap: 1.067vw;
+  padding-top: 1.6vw;
 }
 
 .user-name {
-  font-size: 15px;
+  font-size: 4vw;
   color: #333;
   font-weight: 500;
 }
 
 .user-desc {
-  font-size: 13px;
+  font-size: 3.467vw;
   color: #999;
   line-height: 1.3;
 }
@@ -849,10 +845,10 @@ watch(
 
 .video-overlay {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 32px;
-  height: 32px;
+  top: 2.133vw;
+  right: 2.133vw;
+  width: 8.533vw;
+  height: 8.533vw;
   background: rgba(0, 0, 0, 0.5);
   border-radius: 50%;
   display: flex;
@@ -863,30 +859,30 @@ watch(
 }
 
 .play-icon {
-  font-size: 20px;
+  font-size: 5.333vw;
   color: #fff;
   opacity: 0.9;
 }
 
 .video-duration {
   position: absolute;
-  right: 8px;
-  bottom: 8px;
+  right: 2.133vw;
+  bottom: 2.133vw;
   background: rgba(0, 0, 0, 0.6);
   color: #fff;
-  padding: 2px 6px;
-  border-radius: 2px;
-  font-size: 12px;
+  padding: 0.533vw 1.6vw;
+  border-radius: 0.533vw;
+  font-size: 3.2vw;
   z-index: 1;
 }
 
 .content-info {
-  padding: 8px;
+  padding: 2.133vw;
 }
 
 .title {
-  margin: 4px 0;
-  font-size: 14px;
+  margin: 1.067vw 0;
+  font-size: 3.733vw;
   line-height: 1.4;
   color: #333;
   word-break: break-all;
@@ -897,17 +893,17 @@ watch(
 }
 
 .tags {
-  margin: 4px 0;
+  margin: 1.067vw 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 1.067vw;
 }
 
 .tag {
-  font-size: 12px;
+  font-size: 3.2vw;
   color: #999;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 0.533vw 1.6vw;
+  border-radius: 1.067vw;
   background-color: #f5f5f5;
 }
 
@@ -915,39 +911,39 @@ watch(
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 8px;
+  margin-top: 2.133vw;
 }
 
 .user-info {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 1.6vw;
 }
 
 .avatar {
-  width: 24px;
-  height: 24px;
+  width: 6.4vw;
+  height: 6.4vw;
   border-radius: 50%;
 }
 
 .username {
-  font-size: 12px;
+  font-size: 3.2vw;
   color: #666;
 }
 
 .likes {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0.533vw;
   color: #999;
 }
 
 .likes .van-icon {
-  font-size: 14px;
+  font-size: 3.733vw;
 }
 
 .like-count {
-  font-size: 11px;
+  font-size: 2.933vw;
 }
 
 .likes .liked {
@@ -956,14 +952,15 @@ watch(
 
 .loading-more {
   text-align: center;
-  padding: 16px 0;
+  padding: 4.267vw 0;
   background: transparent;
 }
 
 .loading-finished {
   color: #969799;
-  font-size: 14px;
-  padding: 16px 0;
+  font-size: 3.733vw;
+  padding: 4.267vw 0;
+  text-align: center;
 }
 
 /* 视频播放器样式优化 */
@@ -1000,42 +997,62 @@ img[lazy="loading"] {
 }
 
 :deep(.van-pull-refresh__head) {
-  transform: none;
+  transform: translateY(-100%);
+  position: relative;
+  left: 0;
+  width: 100%;
+  text-align: center;
 }
 
 :deep(.van-pull-refresh__text) {
-  font-size: 14px;
+  font-size: 3.733vw;
   color: #666;
+  line-height: 10.667vw;
 }
 
 :deep(.van-pull-refresh__loading) {
   margin: 8px 0;
 }
 
-@media screen and (max-width: 320px) {
+:deep(.van-loading__text) {
+  color: #666;
+  font-size: 3.733vw;
+}
+
+/* 添加加载动画 */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.feed-item {
+  animation: fade-in 0.3s ease-out;
+}
+
+@media screen and (min-width: 768px) {
+  /* 在平板或桌面设备上使用更合适的尺寸 */
   .feed-container {
-    padding: 8px;
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
   }
   
   .waterfall-container {
-    gap: 8px;
+    gap: 24px;
   }
   
   .feed-item {
-    margin-bottom: 8px;
+    margin-bottom: 24px;
+    border-radius: 16px;
   }
   
-  .title {
-    font-size: 13px;
-  }
-  
-  .tag {
-    font-size: 11px;
-  }
-  
-  .username {
-    font-size: 11px;
-  }
+  /* 其他桌面端样式... */
 }
 
 /* 骨架屏样式 */
@@ -1060,39 +1077,39 @@ img[lazy="loading"] {
 }
 
 .skeleton-title {
-  height: 16px;
+  height: 4.267vw;
   background: linear-gradient(90deg, #f2f2f2 25%, #e6e6e6 37%, #f2f2f2 63%);
   background-size: 400% 100%;
   animation: skeleton-loading 1.4s ease infinite;
   margin-bottom: 8px;
-  border-radius: 4px;
+  border-radius: 1.067vw;
 }
 
 .skeleton-tags {
   display: flex;
-  gap: 8px;
-  margin: 8px 0;
+  gap: 2.133vw;
+  margin: 2.133vw 0;
 }
 
 .skeleton-tag {
-  width: 60px;
-  height: 20px;
+  width: 16vw;
+  height: 5.333vw;
   background: linear-gradient(90deg, #f2f2f2 25%, #e6e6e6 37%, #f2f2f2 63%);
   background-size: 400% 100%;
   animation: skeleton-loading 1.4s ease infinite;
-  border-radius: 4px;
+  border-radius: 1.067vw;
 }
 
 .skeleton-user {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 2.133vw;
+  margin-top: 3.2vw;
 }
 
 .skeleton-avatar {
-  width: 24px;
-  height: 24px;
+  width: 6.4vw;
+  height: 6.4vw;
   border-radius: 50%;
   flex-shrink: 0;
   background: linear-gradient(90deg, #f2f2f2 25%, #e6e6e6 37%, #f2f2f2 63%);
@@ -1101,12 +1118,12 @@ img[lazy="loading"] {
 }
 
 .skeleton-info {
-  height: 12px;
+  height: 3.2vw;
   width: 100%;
   background: linear-gradient(90deg, #f2f2f2 25%, #e6e6e6 37%, #f2f2f2 63%);
   background-size: 400% 100%;
   animation: skeleton-loading 1.4s ease infinite;
-  border-radius: 4px;
+  border-radius: 1.067vw;
 }
 
 @keyframes skeleton-loading {

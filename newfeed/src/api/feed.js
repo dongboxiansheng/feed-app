@@ -1,37 +1,46 @@
-import request from '@/utils/request';
+import request from '../utils/request'
 
-// 获取Feed列表，支持分页
-export const getFeedList = ({ page = 1, pageSize = 10 }) => {
+// Mock API 基础 URL - 这是一个已经配置好的 MockAPI 地址
+const BASE_URL = 'https://64c8b9a8a1fe0128fbd5f5b1.mockapi.io/api/v1'
+
+// 获取 Feed 列表
+export function getFeedList(params) {
   return request({
-    url: '/api/feed/list',
+    url: '/feeds',
     method: 'get',
     params: {
-      page,
-      pageSize
+      page: params.page,
+      limit: params.pageSize
     }
-  });
-};
+  })
+}
 
 // 获取推荐用户列表
-export const getRecommendedUsers = () => {
+export function getRecommendUsers() {
   return request({
-    url: '/api/users/recommended',
+    url: `${BASE_URL}/users`,
     method: 'get'
-  });
-};
+  })
+}
+
+// 点赞/取消点赞
+export function toggleLike(feedId, isLike) {
+  return request({
+    url: `${BASE_URL}/feeds/${feedId}`,
+    method: 'put',
+    data: {
+      isLiked: isLike
+    }
+  })
+}
 
 // 关注/取消关注用户
-export const toggleUserFollow = (userId) => {
+export function toggleFollow(userId, isFollow) {
   return request({
-    url: `/api/users/${userId}/follow`,
-    method: 'post'
-  });
-};
-
-// 点赞/取消点赞动态
-export const toggleLike = (feedId) => {
-  return request({
-    url: `/api/feed/${feedId}/like`,
-    method: 'post'
-  });
-}; 
+    url: `${BASE_URL}/users/${userId}`,
+    method: 'put',
+    data: {
+      isFollowed: isFollow
+    }
+  })
+} 

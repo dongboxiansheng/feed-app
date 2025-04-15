@@ -3,7 +3,7 @@ import Feed from '../components/Feed.vue'
 
 const routes = [
   {
-    path: '/233',
+    path: '/',
     name: 'Feed',
     component: Feed
   }
